@@ -4,87 +4,81 @@
 .opencode
 
 # IDE and Editors
-.idea/
-.vscode/
+**/.idea/
+**/.vscode/
 *.swp
 *.swo
 *~
-.project
-.classpath
-.settings/
+**/.project
+**/.classpath
+**/.settings/
 *.sublime-project
 *.sublime-workspace
-.spyproject/
-.ropeproject/
+**/.spyproject/
+**/.ropeproject/
 *.code-workspace
 
 # macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-.Spotlight-V100
-.Trashes
+**/.DS_Store
+**/.AppleDouble
+**/.LSOverride
+**/._*
+**/.Spotlight-V100
+**/.Trashes
 
 # Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
+**/Thumbs.db
+**/ehthumbs.db
+**/Desktop.ini
+**/$RECYCLE.BIN/
 *.lnk
 
 # Linux
-*~
-.fuse_hidden*
-.nfs*
+**/.fuse_hidden*
+**/.nfs*
 
 # Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
-.yarn/cache
-.pnpm-store/
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.npm
+**/.yarn/cache
+**/.pnpm-store/
 
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+**/.Python
+**/build/
+**/develop-eggs/
+**/dist/
+**/downloads/
+**/eggs/
+**/.eggs/
+**/parts/
+**/sdist/
+**/var/
+**/wheels/
 *.egg-info/
-.installed.cfg
+**/.installed.cfg
 *.egg
-.venv/
-venv/
-ENV/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+**/.venv/
+**/venv/
+**/ENV/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 
 # Java
 *.class
 *.jar
 *.war
 *.ear
-target/
-.gradle/
-gradle/
+**/.gradle/
 
-# C/C++
+# C/C++/Go/Rust
 *.o
 *.obj
 *.exe
@@ -93,32 +87,26 @@ gradle/
 *.dll
 *.dylib
 *.so
-
-# Rust
-target/
-Cargo.lock
-
-# Go
-*.exe
 *.test
-*.out
-go.work
+**/target/
+**/go.work
+**/Cargo.lock
 
 # Ruby
 *.gem
 *.rbc
-.bundle/
-vendor/bundle
-.byebug_history
+**/.bundle/
+**/vendor/bundle
+**/.byebug_history
 
 # Logs
 *.log
-logs/
+**/logs/
 
 # Environment and secrets
-.env
-.env.local
-.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 *.pem
 *.key
 
@@ -128,6 +116,6 @@ logs/
 *.bak
 *.backup
 *.cache
-.cache/
-tmp/
-temp/
+**/.cache/
+**/tmp/
+**/temp/
