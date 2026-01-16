@@ -36,10 +36,18 @@ When explaining a tool call for Listing All Files with Details, use Simplified C
 列出所有文件及其详情
 ```
 
+```
+3 个剩余步骤
+```
+
 ### Incorrect
 
 ```
 List all files with details
+```
+
+```
+3 todos
 ```
 
 ## Exceptions
