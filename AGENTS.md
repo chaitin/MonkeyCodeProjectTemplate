@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This document defines the rules and guidelines that AI agents must follow when working in this repository.
+This document defines the rules and guidelines that AI agents on behalf of MonkeyCode-AI Smart Development Platform must follow when working in this repository.
 
 ## Output Format
 
