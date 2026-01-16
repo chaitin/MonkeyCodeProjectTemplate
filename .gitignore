@@ -45,6 +45,7 @@
 **/.npm
 **/.yarn/cache
 **/.pnpm-store/
+**/*.tsbuild*
 
 # Python
 **/__pycache__/

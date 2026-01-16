@@ -6,6 +6,16 @@ This document defines the rules and guidelines that AI agents must follow when w
 
 Do not include any emoji characters in your output. Keep all responses in plain text format using only standard ASCII or Unicode text characters.
 
+## Language
+
+All responses and reasoning processes must be output in Simplified Chinese (简体中文).
+
+- Response text to the user must be in Simplified Chinese
+- Reasoning and explanations should be in Simplified Chinese
+- Code comments may remain in English for compatibility
+- Technical terms may be kept in English where appropriate, but explanations should be in Chinese
+- Code syntax, file names, paths, and commands remain unchanged
+
 ## Shell Commands
 
 ### Comment Style
