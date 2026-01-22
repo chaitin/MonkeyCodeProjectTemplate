@@ -1,0 +1,66 @@
+name: Upload to Aliyun OSS
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install ossutil
+        run: |
+          wget https://gosspublic.alicdn.com/ossutil/1.7.16/ossutil64
+          chmod 755 ossutil64
+          sudo mv ossutil64 /usr/local/bin/ossutil
+
+      - name: Zip repository
+        run: |
+          REF=$(echo "${{ github.ref }}" | sed 's|refs/heads/||' | sed 's|refs/tags/||')
+          FILENAME="codingmatrix-project-tpl.${REF}.zip"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          echo "REF=${REF}" >> $GITHUB_ENV
+          zip -r ${FILENAME} . -x ".github/*" ".git/*" "*/\.*"
+          ls -lh ${FILENAME}
+
+      - name: Upload to OSS
+        env:
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_PREFIX: ${{ secrets.OSS_PREFIX }}
+        run: |
+          if [ -z "$OSS_BUCKET" ] || [ -z "$OSS_ENDPOINT" ] || [ -z "$OSS_ACCESS_KEY_ID" ] || [ -z "$OSS_ACCESS_KEY_SECRET" ]; then
+            echo "OSS secrets not configured, skipping upload"
+            exit 0
+          fi
+
+          # 构建上传路径
+          PREFIX="${OSS_PREFIX:-}"
+          OSS_PATH="${PREFIX}/${FILENAME}"
+          echo "Uploading to: oss://${OSS_BUCKET}/${OSS_PATH}"
+
+          # 配置并上传
+          ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" -L CH
+          ossutil cp "${FILENAME}" "oss://${OSS_BUCKET}/${OSS_PATH}" -f --acl public-read
+
+          echo "Upload completed: https://${OSS_BUCKET}.${OSS_ENDPOINT}/${OSS_PATH}"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "${{ env.FILENAME }}"
