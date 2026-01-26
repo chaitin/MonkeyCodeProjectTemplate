@@ -56,6 +56,8 @@ Automatically detect the project type and start the appropriate development serv
 
 1. Detect the project type and start the appropriate server in the background:
 
+> **Note**: The example commands below run in the foreground. When executing, the model must run these commands in the background (e.g., using the `&` suffix) to avoid blocking the session.
+
 ```bash
 # Step 1: Node.js project
 if [ -f "package.json" ]; then
@@ -129,7 +131,9 @@ fi
 
 3. Call MCP Tool `request_preview` with the listening port number to get a preview URL.
 
-4. Present the preview URL to the user.
+4. Present the preview URL to the user:
+   - Output a clickable hyperlink pointing to the preview address returned by the tool
+   - Inform the user: If access is denied due to IP not being whitelisted, they can use the "Online Preview" button in the top right corner of the page to manually add their IP to the whitelist
 
 ## Notes
 
