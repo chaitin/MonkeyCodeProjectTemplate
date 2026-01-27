@@ -133,7 +133,11 @@ fi
 
 4. Present the preview URL to the user:
    - Output a clickable hyperlink pointing to the preview address returned by the tool
-   - Inform the user: If access is denied due to IP not being whitelisted, they can use the "Online Preview" button in the top right corner of the page to manually add their IP to the whitelist
+
+5. Handle IP whitelist issues:
+   - If the user reports that access is denied due to IP not being whitelisted, ask the user for their IP address(es) which reported by the deny page
+   - Call MCP Tool `request_preview` again with the `additional_ip_whitelist` field to add the user's IP(s) to the whitelist
+   - The `additional_ip_whitelist` field accepts multiple IPv4 addresses separated by commas (e.g., `"192.168.1.100,10.0.0.50"`)
 
 ## Notes
 
