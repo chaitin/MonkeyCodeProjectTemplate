@@ -155,3 +155,22 @@
 **/web/build/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
+
+# Compressed files
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.tar.xz
+*.txz
+*.gz
+*.bz2
+*.xz
+*.Z
+*.lz
+*.lzma
+*.iso
