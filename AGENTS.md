@@ -46,7 +46,7 @@ Do not execute commands that may run for an extended period:
 Best practices:
 
 - Always set timeouts for network operations
-- Use `timeout <time_limit> <command>` to wrap execution with a time limit
+- If the command **is designed to run in background** (such as `&` appended), this rule **can be ignored**. Otherwise Use `timeout <time_limit> <command>` to wrap execution with a time limit
 - Run potentially long operations as background tasks
 - If a long-running command is required, ask the user for confirmation first
 
