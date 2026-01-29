@@ -130,20 +130,20 @@ Updated: yyyy-mm-dd
 
 1. **Initialize Feature**
    - Generate a short feature name in `kebab-case` format (e.g., `user-authentication`)
-   - Create directory `.ai-ready/specs/{FEATURE_NAME}/`
+   - Create directory `.monkeycode/specs/{FEATURE_NAME}/`
 
 2. **Gather Context**
-   - Read project documentation from `.ai-ready/docs/` if available:
+   - Read project documentation from `.monkeycode/docs/` if available:
      - `INDEX.md` - Project overview
      - `ARCHITECTURE.md` - System architecture
-   - Scan `.ai-ready/specs/*/` for related historical requirements
+   - Scan `.monkeycode/specs/*/` for related historical requirements
    - Understand existing code structure
 
 3. **Generate Initial Requirements**
    - Decompose the feature idea into user stories
    - Apply EARS patterns to each acceptance criterion
    - Validate against INCOSE quality rules
-   - Write to `.ai-ready/specs/{FEATURE_NAME}/requirements.md`
+   - Write to `.monkeycode/specs/{FEATURE_NAME}/requirements.md`
 
 4. **Iterate with User**
    - Present requirements document to user
@@ -161,12 +161,12 @@ Updated: yyyy-mm-dd
 1. **Initialize Design Document**
    - Get current date via `date '+%Y-%m-%d'`
    - Create feature name with date prefix (e.g., `2025-01-15-user-authentication`)
-   - Create initial design outline in `.ai-ready/specs/{FEATURE_NAME}/design.md`
+   - Create initial design outline in `.monkeycode/specs/{FEATURE_NAME}/design.md`
 
 2. **Gather Technical Context**
-   - Read `.ai-ready/docs/INDEX.md` and `.ai-ready/docs/ARCHITECTURE.md`
+   - Read `.monkeycode/docs/INDEX.md` and `.monkeycode/docs/ARCHITECTURE.md`
    - Analyze project structure and existing patterns
-   - Review related specifications in `.ai-ready/specs/`
+   - Review related specifications in `.monkeycode/specs/`
 
 3. **Generate Design Document**
    - Include all required sections:
@@ -206,7 +206,7 @@ During the workflow, ask the user about:
 ## Output Files
 
 ```
-.ai-ready/specs/{FEATURE_NAME}/
+.monkeycode/specs/{FEATURE_NAME}/
 ├── requirements.md    # EARS-compliant requirements
 └── design.md          # Technical design specification
 ```

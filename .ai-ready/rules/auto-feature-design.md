@@ -45,11 +45,11 @@
 2. 使用 EARS 模式生成需求文档
 3. 通过迭代问答完善需求
 4. 生成技术设计文档
-5. 将文档保存到 `.ai-ready/specs/{FEATURE_NAME}/` 目录
+5. 将文档保存到 `.monkeycode/specs/{FEATURE_NAME}/` 目录
 
 ## 输出文件
 
-执行后会在 `.ai-ready/specs/{FEATURE_NAME}/` 目录下生成：
+执行后会在 `.monkeycode/specs/{FEATURE_NAME}/` 目录下生成：
 - `requirements.md` - 符合 EARS 规范的需求文档
 - `design.md` - 技术设计规格说明书
 
