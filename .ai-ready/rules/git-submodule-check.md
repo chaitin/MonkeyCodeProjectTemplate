@@ -1,6 +1,6 @@
 # Git Submodule Check Rule
 
-在执行任何开发任务之前，必须先检查并加载所有的 Git Submodules。
+在用户与模型首次对话时，必须先检查并加载所有的 Git Submodules。
 
 ## 执行时机
 
