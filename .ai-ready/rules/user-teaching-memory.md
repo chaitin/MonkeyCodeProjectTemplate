@@ -1,82 +1,143 @@
-# User Teaching Memory Rule
+# 用户指令记忆规则
 
-## Description
-When a user teaches or instructs the AI assistant on how to perform a task or behave in a certain way during a chat conversation, these teachings should be recorded in a .monkeycode/MEMORY.md file located in the repository root.
+## 描述
 
-## Implementation
-- Monitor chat conversations for teaching-oriented instructions from users
-- Before adding a new entry, scan .monkeycode/MEMORY.md for similar or identical instructions
-- If a duplicate is found, either skip adding the new entry or merge it with the existing one
-- When merging, update the existing entry with new context or date
-- If no duplicate is found, append the instruction to .monkeycode/MEMORY.md in the repository root
-- Format entries with date, user instruction, and context
-- Preserve user privacy while capturing useful behavioral instructions
+当用户在对话中教导或指示 AI 助手如何执行任务或以某种方式行动时，这些教导应被记录到仓库根目录的 `.monkeycode/MEMORY.md` 文件中。此外，当 Agent 在执行任务过程中发现有价值的项目知识（如代码结构模式、代码生成工作流、构建方法等），也应主动将这些发现记录到同一文件中。
 
-## Purpose
-This creates a persistent memory of user preferences and instructions that can guide future interactions and customizations.
+## 实现方式
 
-## MUST DO
+- 监控对话中用户的教导性指令
+- 在任务执行过程中，主动识别并记录项目特有的知识（代码结构、代码生成时机/方法、构建方法、测试模式等）
+- 添加新条目前，先扫描 `.monkeycode/MEMORY.md` 检查是否存在相似或相同的指令
+- 若发现重复，跳过新条目或与已有条目合并
+- 合并时，更新已有条目的上下文或日期
+- 若无重复，将指令追加到仓库根目录的 `.monkeycode/MEMORY.md` 中
+- 条目格式应包含日期、用户指令和上下文
+- 在记录有用的行为指令时注意保护用户隐私
 
-- You MUST CREATE the [Memory File](.monkeycode/MEMORY.md) according to the **File Template** before your first reply IF IT'S NOT EXIST!
-- You MUST READ the [Memory File](.monkeycode/MEMORY.md) as project level instruction before your first reply!
-- EVERY user input should be validated by the following **Trigger Conditions**, Once MATCHED, UPDATE the [Memory File](.monkeycode/MEMORY.md) with user's instruction IMMEDIATLY BEFORE DOING ANYTHING
+## 目的
 
-## Trigger Conditions
+建立用户偏好和指令的持久化记忆，用于指导未来的交互和定制。
 
-### 1. User provides EXPLICIT INSTRUCTIONS about how to behave
+## 强制执行事项
 
-> Examples:
+- 如果 [记忆文件](.monkeycode/MEMORY.md) 不存在，**必须**在首次回复前按照**文件模板**创建该文件！
+- **必须**在首次回复前读取 [记忆文件](.monkeycode/MEMORY.md) 作为项目级指令！
+- **每一条**用户输入都应按照以下**触发条件**进行验证，一旦匹配，**必须立即**更新 [记忆文件](.monkeycode/MEMORY.md)，然后再执行其他任何操作
+
+## 触发条件
+
+### 1. 用户提供关于行为方式的明确指令
+
+> 示例：
 > - "回复我的时候请用中文"
 > - "Always respond in bullet points"
 > - "代码注释统一用英文写"
 > - "不要在回复中使用 emoji"
 
-### 2. User INSTRUCTS or CORRECTS the assistant's behavior
+### 2. 用户指示或纠正助手的行为
 
-> Examples:
-> - **Do something when some condition**: "每次改完代码后自动跑一下 lint"、"When I ask you to refactor, always write unit tests first"
-> - **Don't do something when some condition**: "不要自动删除注释掉的代码"、"Don't modify files outside the src/ directory unless I explicitly say so"
-> - **Use (or don't use) XXX to do something in XXX project/module**: "这个项目用 pnpm 不要用 npm"、"Use `pytest` instead of `unittest` in this repo"、"在 backend 模块里不要用 print，用 logger"
+> 示例：
+> - **满足某条件时做某事**："每次改完代码后自动跑一下 lint"、"When I ask you to refactor, always write unit tests first"
+> - **满足某条件时不做某事**："不要自动删除注释掉的代码"、"Don't modify files outside the src/ directory unless I explicitly say so"
+> - **在某项目/模块中使用（或不使用）某工具**："这个项目用 pnpm 不要用 npm"、"Use `pytest` instead of `unittest` in this repo"、"在 backend 模块里不要用 print，用 logger"
 
-### 3. User gives advice on preferred approaches
+### 3. 用户提出偏好的实现方式
 
-> Examples:
+> 示例：
 > - "我更喜欢函数式写法，少用 class"
 > - "Prefer composition over inheritance in this project"
 > - "写 SQL 的时候用 CTE 而不是子查询"
 > - "CSS 优先用 Tailwind 的 utility class，不要写自定义样式"
 
-### 4. User explains how they'd like tasks to be performed
+### 4. 用户说明期望的任务执行方式
 
-> Examples:
+> 示例：
 > - "改 bug 之前先帮我写个能复现问题的测试用例"
 > - "每次提交代码前先跑 `make check`"
 > - "重构的时候一次只改一个文件，改完我确认了再继续"
 > - "When adding a new API endpoint, always update the OpenAPI spec first"
 
-## File Template for MEMORY.md
+### 5. Agent 在执行任务过程中主动发现项目知识
+
+Agent 在阅读代码、执行构建、调试问题等任务过程中，如果发现了对后续开发有参考价值的项目知识，应主动记录到 MEMORY.md 中。这类知识不需要用户明确指示，Agent 应自行判断并记录。
+
+#### 触发时机
+
+- **阅读代码时**：发现项目的典型代码结构、分层模式、命名约定等
+- **执行构建时**：了解到项目的构建命令、构建工具链、构建配置等
+- **运行测试时**：了解到测试框架、测试命令、测试约定等
+- **代码生成时**：发现项目使用了代码生成工具（如 protobuf、OpenAPI codegen、ORM migration 等），记录生成的时机和方法
+- **调试问题时**：发现项目的特殊依赖关系、环境要求、已知陷阱等
+
+#### 应记录的内容类别
+
+| 类别 | 说明 | 示例 |
+|------|------|------|
+| 代码结构 | 项目的目录组织、分层架构、模块划分 | "项目采用 DDD 分层：domain/application/infrastructure/interfaces" |
+| 代码模式 | 项目中反复出现的典型写法和约定 | "所有 API handler 统一使用 `handleXxx` 命名，返回值包裹在 `Result<T>` 中" |
+| 代码生成 | 自动生成代码的工具、触发时机、生成命令 | "修改 proto 文件后需执行 `make gen-proto` 重新生成 gRPC 代码" |
+| 构建方法 | 项目的构建命令、构建工具、构建流程 | "前端使用 `pnpm build`，后端使用 `go build ./cmd/server`" |
+| 测试方法 | 测试框架、测试命令、测试约定 | "单元测试使用 `pytest`，集成测试使用 `pytest -m integration`" |
+| 依赖关系 | 模块间的关键依赖、外部服务依赖 | "用户模块依赖 Redis 做会话存储，启动前需确保 Redis 可用" |
+| 环境配置 | 开发环境的特殊配置要求 | "需要设置环境变量 `DATABASE_URL` 才能启动本地开发服务器" |
+
+#### 记录格式
+
+使用与用户指令相同的条目格式，但 Context 字段标注为 Agent 自主发现：
+
+```
+[项目知识摘要]
+- Date: [YYYY-MM-DD]
+- Context: Agent 在执行 [具体任务描述] 时发现
+- Category: [代码结构|代码模式|代码生成|构建方法|测试方法|依赖关系|环境配置]
+- Instructions:
+  - [具体的知识点，逐行描述]
+```
+
+#### 注意事项
+
+- **避免记录显而易见的内容**：如 "项目使用了 JavaScript" 这类不需要特别记忆的信息
+- **聚焦可操作性**：记录的内容应对后续开发任务有直接帮助
+- **遵循去重策略**：与用户指令条目一样，新发现的知识需要先检查是否已有类似记录
+- **不记录敏感信息**：不记录密钥、密码、token 等敏感内容
+- **及时记录**：在发现后尽快写入 MEMORY.md，不要等到任务结束
+
+## MEMORY.md 文件模板
 
 ```markdown
-# Memory of User Instructions
+# 用户指令记忆
 
-This file contains a record of user instructions, preferences, and teachings that should be remembered for future interactions.
+本文件记录了用户的指令、偏好和教导，用于在未来的交互中提供参考。
 
-## Format
-Entries should follow this format:
+## 格式
 
-[User instruction summary]
+### 用户指令条目
+用户指令条目应遵循以下格式：
+
+[用户指令摘要]
 - Date: [YYYY-MM-DD]
-- Context: [Where or when this was mentioned]
+- Context: [提及的场景或时间]
 - Instructions:
-  - [What the user taught or instructed, line by line]
+  - [用户教导或指示的内容，逐行描述]
 
-## Deduplication Policy
-- Before adding a new entry, check for similar or identical instructions
-- If a duplicate is found, either skip the new entry or merge with existing one
-- When merging, update with new context or date information
-- This helps prevent redundant entries and keeps the memory clean
+### 项目知识条目
+Agent 在任务执行过程中发现的条目应遵循以下格式：
 
-## Entries
+[项目知识摘要]
+- Date: [YYYY-MM-DD]
+- Context: Agent 在执行 [具体任务描述] 时发现
+- Category: [代码结构|代码模式|代码生成|构建方法|测试方法|依赖关系|环境配置]
+- Instructions:
+  - [具体的知识点，逐行描述]
 
-[some memory entries in the Format declared above]
+## 去重策略
+- 添加新条目前，检查是否存在相似或相同的指令
+- 若发现重复，跳过新条目或与已有条目合并
+- 合并时，更新上下文或日期信息
+- 这有助于避免冗余条目，保持记忆文件整洁
+
+## 条目
+
+[按上述格式记录的记忆条目]
 ```
