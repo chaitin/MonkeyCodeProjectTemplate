@@ -15,17 +15,44 @@ When a user teaches or instructs the AI assistant on how to perform a task or be
 ## Purpose
 This creates a persistent memory of user preferences and instructions that can guide future interactions and customizations.
 
-**You MUST READ the [Memory File](.monkeycode/MEMORY.md) as project level instruction before your first your reply!**
+## MUST DO
+
+- You MUST CREATE the [Memory File](.monkeycode/MEMORY.md) according to the **File Template** before your first reply IF IT'S NOT EXIST!
+- You MUST READ the [Memory File](.monkeycode/MEMORY.md) as project level instruction before your first reply!
+- EVERY user input should be validated by the following **Trigger Conditions**, Once MATCHED, UPDATE the [Memory File](.monkeycode/MEMORY.md) with user's instruction IMMEDIATLY BEFORE DOING ANYTHING
 
 ## Trigger Conditions
-- User provides explicit instructions about how to behave
-- User corrects the assistant's behavior, for example:
-  - Do something when some condition
-  - Don't do something when some condition
-  - Use (or don't use) XXX (command or method) to Do something In XXX project/module
-- User gives advice on preferred approaches
-- User explains how they'd like tasks to be performed
 
+### 1. User provides EXPLICIT INSTRUCTIONS about how to behave
+
+> Examples:
+> - "回复我的时候请用中文"
+> - "Always respond in bullet points"
+> - "代码注释统一用英文写"
+> - "不要在回复中使用 emoji"
+
+### 2. User INSTRUCTS or CORRECTS the assistant's behavior
+
+> Examples:
+> - **Do something when some condition**: "每次改完代码后自动跑一下 lint"、"When I ask you to refactor, always write unit tests first"
+> - **Don't do something when some condition**: "不要自动删除注释掉的代码"、"Don't modify files outside the src/ directory unless I explicitly say so"
+> - **Use (or don't use) XXX to do something in XXX project/module**: "这个项目用 pnpm 不要用 npm"、"Use `pytest` instead of `unittest` in this repo"、"在 backend 模块里不要用 print，用 logger"
+
+### 3. User gives advice on preferred approaches
+
+> Examples:
+> - "我更喜欢函数式写法，少用 class"
+> - "Prefer composition over inheritance in this project"
+> - "写 SQL 的时候用 CTE 而不是子查询"
+> - "CSS 优先用 Tailwind 的 utility class，不要写自定义样式"
+
+### 4. User explains how they'd like tasks to be performed
+
+> Examples:
+> - "改 bug 之前先帮我写个能复现问题的测试用例"
+> - "每次提交代码前先跑 `make check`"
+> - "重构的时候一次只改一个文件，改完我确认了再继续"
+> - "When adding a new API endpoint, always update the OpenAPI spec first"
 
 ## File Template for MEMORY.md
 
