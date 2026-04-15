@@ -1,261 +1,209 @@
 ---
 name: deploy-website
-description: Deploy and serve web projects locally for preview. Automatically detects project type (Node.js, PHP, Python/Django/Flask/Unicorn, Go, Ruby/Rails, Java/Spring Boot, Rust, or static HTML) and starts the appropriate development server.
+description: 部署并本地预览 Web 项目。自动检测项目类型（Node.js、PHP、Python/Django/Flask/Gunicorn、Go、Ruby/Rails、Java/Spring Boot、Rust 或静态 HTML），启动对应的开发服务器。
 arguments:
   - name: workspace
-    description: Absolute path to the workspace directory to deploy
+    description: 要部署的工作区目录的绝对路径
     required: false
 ---
 
-# Deploy Website
+# 部署网站
 
-Automatically detect the project type and start the appropriate development server **IN THE BACKGROUND**, then request a Preview URL with MCP Tool `request_preview`
+自动检测项目类型，使用 `background_terminal_create` **在后台启动** 对应的开发服务器，确认启动成功后通过 MCP 工具 `request_preview` 获取预览地址。
 
-## Detection Logic
+## 项目类型检测逻辑
 
-1. **Node.js web project**
-   - Look for `package.json` in the workspace root
-   - Check if it contains a `dev` or `start` script
-   - Execute `npm run dev` (or `npm start` if `dev` is not available)
+1. **Node.js Web 项目**
+   - 在工作区根目录查找 `package.json`
+   - 检查是否包含 `dev` 或 `start` 脚本
+   - 执行 `npm run dev`（若无 `dev` 则执行 `npm start`）
 
-2. **Static website**
-   - Look for `.html` files in the workspace (especially `index.html`)
-   - Execute `python3 -m http.server 8000` to serve static files
+2. **静态网站**
+   - 在工作区查找 `.html` 文件（尤其是 `index.html`）
+   - 执行 `python3 -m http.server 8000` 提供静态文件服务
 
-3. **Other kind of websites**
+3. **其他类型网站**
 
-   Detect project type and use appropriate server:
+   根据项目特征文件检测类型并使用对应服务器：
 
-   - **PHP projects** - Look for `.php` files or `composer.json`
-     - Execute `php -S localhost:8000` to serve PHP files
-     - If `public/index.php` exists, serve from `public` directory
-   - **Python projects**
-     - **Django** - Look for `manage.py` and `settings.py`
-       - Execute `python manage.py runserver 8000`
-     - **Flask** - Look for `app.py` or `wsgi.py`
-       - Execute `python app.py` or `flask run --port=8000`
-     - **Unicorn/uWSGI** - Look for `gunicorn.conf.py` or `uwsgi.ini`
-       - Execute `gunicorn -b 0.0.0.0:8000 app:app` (adjust module name)
-     - **Generic** - Look for `requirements.txt` or `pyproject.toml`
-       - Execute `python -m http.server 8000`
-   - **Go projects** - Look for `go.mod`
-     - Execute `go run main.go` or `go run .` (usually handles its own server)
-   - **Ruby/Rails** - Look for `Gemfile` with `rails`
-     - Execute `rails server -p 8000` or `bundle exec rails server -p 8000`
-   - **Java/Spring Boot** - Look for `pom.xml` (Maven) or `build.gradle` (Gradle)
-     - Execute `mvn spring-boot:run` or `./gradlew bootRun`
-   - **Rust/Axum/Actix** - Look for `Cargo.toml`
-     - Execute `cargo run`
-     
-   - **README-based detection** - If standard detection fails:
-     - Search README files (`README.md`, `README.rst`, `README.txt`, `doc/README.md`)
-     - Look for keywords like `run`, `start`, `serve`, `dev`, `preview`
-     - Extract and execute the suggested command
+   - **PHP 项目** - 查找 `.php` 文件或 `composer.json`
+     - 执行 `php -S localhost:8000`
+     - 若存在 `public/index.php`，则从 `public` 目录提供服务
+   - **Python 项目**
+     - **Django** - 查找 `manage.py` 和 `settings.py`
+       - 执行 `python manage.py runserver 8000`
+     - **Flask** - 查找 `app.py` 或 `wsgi.py`
+       - 执行 `python app.py` 或 `flask run --port=8000`
+     - **Gunicorn/uWSGI** - 查找 `gunicorn.conf.py` 或 `uwsgi.ini`
+       - 执行 `gunicorn -b 0.0.0.0:8000 app:app`（根据实际模块名调整）
+     - **通用 Python** - 查找 `requirements.txt` 或 `pyproject.toml`
+       - 执行 `python -m http.server 8000`
+   - **Go 项目** - 查找 `go.mod`
+     - 执行 `go run main.go` 或 `go run .`
+   - **Ruby/Rails** - 查找包含 `rails` 的 `Gemfile`
+     - 执行 `rails server -p 8000` 或 `bundle exec rails server -p 8000`
+   - **Java/Spring Boot** - 查找 `pom.xml`（Maven）或 `build.gradle`（Gradle）
+     - 执行 `mvn spring-boot:run` 或 `./gradlew bootRun`
+   - **Rust/Axum/Actix** - 查找 `Cargo.toml`
+     - 执行 `cargo run`
+   - **基于 README 检测** - 若以上方式均未匹配：
+     - 搜索 README 文件（`README.md`、`README.rst`、`README.txt`、`doc/README.md`）
+     - 查找包含 `run`、`start`、`serve`、`dev`、`preview` 等关键词的命令
+     - 提取并执行对应命令
 
-## Workflow
+## 工作流程
 
-1. **Check for existing server processes** before starting a new one:
+### 1. 检查是否已有服务器进程
 
-Before attempting to start a new server, check if a similar process is already running and listening on a port:
+启动新服务器之前，先进行以下检查：
+
+- 调用 `background_terminal_list` 检查是否已有运行中的后台终端
+- 检查是否有进程已在监听端口：
 
 ```bash
-# Check for existing Node.js dev servers
-ps aux | grep -E "(npm run dev|npm start|node.*server)" | grep -v grep
-
-# Check for existing Python/PHP/Go servers
-ps aux | grep -E "(python.*manage.py runserver|python.*app.py|flask run|php -S|go run)" | grep -v grep
-
-# Check listening ports with ss/netstat/lsof
 ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || lsof -iTCP -sTCP:LISTEN -P -n
-
-# If a matching process is found listening on a port:
-# - DO NOT start a new server
-# - Use the existing port number
-# - Proceed directly to step 3 to call `request_preview` with that port
 ```
 
-If an existing server process is detected:
-- Extract the port number from the process output
-- Skip server startup and proceed to step 3 to request preview URL
-- Notify the user that an existing server was detected
+若检测到已有服务器进程：
+- 从输出中提取端口号
+- 跳过启动步骤，直接使用该端口调用 `request_preview`
+- 通知用户检测到已有服务器
 
-2. **Detect the project type and start the appropriate server in the background** (only if no existing server found):
+### 2. 查阅项目文档确定启动命令（优先级最高）
 
-> **Note**: The example commands below run in the foreground. When executing, the model must run these commands in the background (e.g., using the `&` suffix) to avoid blocking the session.
->
-> **IMPORTANT**: When starting a server in the background, **CAPTURE AND SAVE THE PID** immediately after launch. This PID must be stored for later process management.
+在使用默认检测逻辑之前，**必须先查阅项目文档**，确认项目是否有明确指定的启动方式。按以下顺序读取文档：
 
-```bash
-# Step 1: Node.js project
-if [ -f "package.json" ]; then
-    npm install  # Ensure dependencies are installed
-    if grep -q '"dev"' package.json; then
-        npm run dev
-    elif grep -q '"start"' package.json; then
-        npm start
-    fi
+1. `.monkeycode/MEMORY.md` - 项目记忆文件，可能包含之前记录的启动方式
+2. `README.md` - 项目说明文档，通常包含开发服务器启动命令
+3. `AGENTS.md` - Agent 指令文件，可能包含针对 AI 助手的启动指引
 
-# Step 2: PHP project
-elif [ -f "composer.json" ] || ls *.php 1> /dev/null 2>&1; then
-    if [ -f "public/index.php" ]; then
-        php -S localhost:8000 -t public
-    else
-        php -S localhost:8000
-    fi
+**查找目标**：在上述文档中搜索与 Web 服务启动相关的内容，例如：
+- 明确的启动命令（如 `npm run dev`、`make serve`、`docker compose up` 等）
+- 启动前的前置步骤（如环境变量设置、配置文件生成等）
+- 指定的端口号或特殊参数
 
-# Step 3: Python projects
-elif [ -f "manage.py" ]; then
-    # Django
-    python manage.py runserver 8000
-elif [ -f "app.py" ] || [ -f "wsgi.py" ]; then
-    # Flask or WSGI app
-    if command -v flask &> /dev/null; then
-        flask run --port=8000
-    else
-        python app.py || python wsgi.py
-    fi
-elif [ -f "gunicorn.conf.py" ] || [ -f "uwsgi.ini" ]; then
-    # Unicorn/uWSGI
-    gunicorn -b 0.0.0.0:8000 app:app
-elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
-    python -m http.server 8000
+**判断逻辑**：
+- 若文档中有**明确的启动指示**，则以文档描述为准，使用文档中指定的命令启动服务器
+- 这个启动命令需要与识别到的项目类型（如开发语言）相匹配
+- 向用户明确告知：启动 Web 服务的方式遵循了哪份文档（例如："按照 README.md 中的说明启动开发服务器"）
+- 若文档中没有相关描述，或描述不明确，则回退到下方的默认检测逻辑
 
-# Step 4: Go project
-elif [ -f "go.mod" ]; then
-    go run . || go run main.go
+### 3. 检测项目类型并使用 `background_terminal_create` 启动服务器
 
-# Step 5: Ruby/Rails project
-elif [ -f "Gemfile" ] && grep -q "rails" Gemfile; then
-    bundle exec rails server -p 8000 || rails server -p 8000
+仅在未检测到已有服务器、且项目文档中未找到明确启动指示时，执行此步骤的默认检测逻辑。
 
-# Step 6: Java/Spring Boot
-elif [ -f "pom.xml" ]; then
-    ./mvnw spring-boot:run || mvn spring-boot:run
-elif [ -f "build.gradle" ]; then
-    ./gradlew bootRun || gradle bootRun
+> **重要**：必须使用 MCP 工具 `background_terminal_create` 启动服务器。该工具在后台终端中运行命令，不会阻塞当前会话，并提供输出日志追踪。
 
-# Step 7: Rust project
-elif [ -f "Cargo.toml" ]; then
-    cargo run
+根据项目类型调用 `background_terminal_create` 执行对应命令：
 
-# Step 8: Static HTML files
-elif [ -f "index.html" ] || ls *.html 1> /dev/null 2>&1; then
-    python3 -m http.server 8000
+- **Node.js 项目**（存在 `package.json`）：
+  - 先在前台执行 `npm install` 确保依赖已安装
+  - 再使用 `background_terminal_create` 执行 `npm run dev`（或 `npm start`）
 
-# Step 9: README-based detection
-else
-    # Search README for startup commands
-    README_FILE=$(find . -maxdepth 2 -iname "README*" | head -1)
-    if [ -n "$README_FILE" ]; then
-        # Extract command containing keywords
-        grep -E "(run|start|serve|dev|preview)" "$README_FILE" | grep -E "^\s*\`?[a-z]+" | head -1 | \
-        sed -E 's/.*\`?([^`]+)$/\1/' | sh
-    fi
-fi
+- **PHP 项目**（存在 `composer.json` 或 `.php` 文件）：
+  - 使用 `background_terminal_create` 执行 `php -S localhost:8000`
+  - 若存在 `public/index.php`，则执行 `php -S localhost:8000 -t public`
+
+- **Python/Django**（存在 `manage.py`）：
+  - 使用 `background_terminal_create` 执行 `python manage.py runserver 8000`
+
+- **Python/Flask**（存在 `app.py` 或 `wsgi.py`）：
+  - 使用 `background_terminal_create` 执行 `flask run --port=8000` 或 `python app.py`
+
+- **Python/Gunicorn**（存在 `gunicorn.conf.py` 或 `uwsgi.ini`）：
+  - 使用 `background_terminal_create` 执行 `gunicorn -b 0.0.0.0:8000 app:app`
+
+- **Python 通用**（存在 `requirements.txt` 或 `pyproject.toml`）：
+  - 使用 `background_terminal_create` 执行 `python -m http.server 8000`
+
+- **Go 项目**（存在 `go.mod`）：
+  - 使用 `background_terminal_create` 执行 `go run .` 或 `go run main.go`
+
+- **Ruby/Rails**（`Gemfile` 中包含 `rails`）：
+  - 使用 `background_terminal_create` 执行 `bundle exec rails server -p 8000`
+
+- **Java/Spring Boot**（存在 `pom.xml` 或 `build.gradle`）：
+  - 使用 `background_terminal_create` 执行 `./mvnw spring-boot:run` 或 `./gradlew bootRun`
+
+- **Rust 项目**（存在 `Cargo.toml`）：
+  - 使用 `background_terminal_create` 执行 `cargo run`
+
+- **静态 HTML 文件**（存在 `index.html` 或其他 `.html` 文件）：
+  - 使用 `background_terminal_create` 执行 `python3 -m http.server 8000`
+
+- **基于 README 检测**（以上均未匹配时）：
+  - 从 README 文件中提取启动命令，使用 `background_terminal_create` 执行
+
+### 4. 读取输出日志确认服务器启动成功
+
+`background_terminal_create` 返回的结果中包含子进程的 ID（PID），记录该 PID 以便后续管理。
+
+然后通过以下步骤确认服务器已成功启动：
+
+```
+# 第 1 步：调用 background_terminal_output_path 获取日志文件路径
+# 第 2 步：使用 Read 工具读取日志文件
+# 第 3 步：查找启动成功的标志，例如：
+#   - "Listening on port ..."
+#   - "Server running at ..."
+#   - "ready in ... ms"
+#   - "Local: http://localhost:..."
+# 第 4 步：若启动失败，读取日志中的错误信息并排查问题
 ```
 
-3. **Capture the PID and port number** after starting the server:
+若日志显示服务器尚未启动完成，等待几秒后重新读取日志文件，重复此过程直到确认服务器已运行或检测到错误。
 
-When starting a server in the background, immediately capture its PID:
+### 5. 获取预览地址
 
-```bash
-# Example for Node.js
-npm run dev &
-SERVER_PID=$!
-echo "Server started with PID: $SERVER_PID"
+调用 MCP 工具 `request_preview`，传入服务器监听的端口号，获取预览 URL。
 
-# Example for Python
-python manage.py runserver 8000 &
-SERVER_PID=$!
-echo "Server started with PID: $SERVER_PID"
+### 6. 向用户展示预览地址
 
-# Example for PHP
-php -S localhost:8000 &
-SERVER_PID=$!
-echo "Server started with PID: $SERVER_PID"
-```
+- 输出可点击的超链接，指向 `request_preview` 返回的预览地址
+- 告知用户后台终端 ID，方便后续管理
 
-**Store the PID** in a temporary file or environment variable for later use:
-```bash
-echo $SERVER_PID > /tmp/deploy_website_server.pid
-```
+### 7. 处理 IP 白名单问题
 
-Also capture the port number from the server output (or use default 8000).
+- 若用户反馈因 IP 未加白名单而无法访问，请用户提供拒绝页面上显示的 IP 地址
+- 再次调用 MCP 工具 `request_preview`，使用 `additional_ip_whitelist` 字段添加用户的 IP
+- `additional_ip_whitelist` 字段接受多个 IPv4 地址，以逗号分隔（例如 `"192.168.1.100,10.0.0.50"`）
 
-4. Call MCP Tool `request_preview` with the listening port number to get a preview URL.
+## 进程管理
 
-5. Present the preview URL to the user:
-   - Output a clickable hyperlink pointing to the preview address returned by the tool
-   - Inform the user of the server PID for reference
+### 查看后台终端
 
-6. Handle IP whitelist issues:
-   - If the user reports that access is denied due to IP not being whitelisted, ask the user for their IP address(es) which reported by the deny page
-   - Call MCP Tool `request_preview` again with the `additional_ip_whitelist` field to add the user's IP(s) to the whitelist
-   - The `additional_ip_whitelist` field accepts multiple IPv4 addresses separated by commas (e.g., `"192.168.1.100,10.0.0.50"`)
+使用 `background_terminal_list` 查看所有运行中的后台终端及其状态。
 
-## Process Management
+### 查看服务器输出
 
-### Recording PIDs
+使用 `background_terminal_output_path` 获取后台终端的日志文件路径，然后读取日志文件查看服务器输出、错误或运行状态。
 
-When the model starts a server process, **ALWAYS** record the PID:
-- Store in a temporary file: `/tmp/deploy_website_server.pid`
-- Include PID in user notifications
-- Keep track of which workspace the PID belongs to
+### 停止服务器
 
-### Stopping Servers
+当用户请求停止服务器时，使用 `background_terminal_kill` 并传入终端 ID 来停止。
 
-When the user requests to stop a server, **ALWAYS** use PID-based termination:
+**严禁**使用 `pkill` 或 `killall` 加进程名的方式停止服务器（例如 `pkill node`、`killall python`），这可能导致：
+- 误杀用户手动启动的进程
+- 误杀其他无关的开发服务器
+- 误杀同名系统进程
 
-```bash
-# Read the PID from storage
-if [ -f "/tmp/deploy_website_server.pid" ]; then
-    SERVER_PID=$(cat /tmp/deploy_website_server.pid)
+始终使用 `background_terminal_kill` 停止由本 skill 启动的服务器。
 
-    # Verify the process exists
-    if ps -p $SERVER_PID > /dev/null 2>&1; then
-        # Graceful termination first
-        kill -TERM $SERVER_PID
+## 注意事项
 
-        # Wait briefly for graceful shutdown
-        sleep 2
-
-        # Force kill if still running
-        if ps -p $SERVER_PID > /dev/null 2>&1; then
-            kill -9 $SERVER_PID
-        fi
-
-        echo "Server (PID: $SERVER_PID) has been stopped"
-        rm /tmp/deploy_website_server.pid
-    else
-        echo "Server process (PID: $SERVER_PID) is not running"
-        rm /tmp/deploy_website_server.pid
-    fi
-else
-    echo "No server PID found. Server may have been started manually."
-fi
-```
-
-**CRITICAL**: Never use `pkill` or `killall` with process names (e.g., `pkill node`, `killall python`) as this may terminate:
-- User's own manually-started processes
-- Other unrelated development servers
-- System processes with similar names
-
-Always prefer PID-based termination for safety.
-
-## Notes
-
-- The server **MUST** run in the background or as a subagent task in order **NOT TO** block the session.
-- Always check for existing server processes before starting a new one to avoid port conflicts.
-- Default port for static server is 8000.
-- For Node.js projects, the port depends on the project configuration.
-- The port number can be dynamically changed when conflicted with another service.
-- Record and track PIDs for all model-started server processes.
-- Use PID-based termination to avoid accidentally killing user processes.
-- Make sure dependencies are installed before running:
-  - Node.js: `npm install`
-  - Python: `pip install -r requirements.txt` (if exists)
-  - PHP: `composer install` (if composer.json exists)
-  - Ruby/Rails: `bundle install` (if Gemfile exists)
-  - Go: `go mod download` (automatically handled by go run)
-  - Java: Dependencies are handled by Maven/Gradle wrapper
-  - Rust: `cargo fetch` (automatically handled by cargo run)
+- 必须使用 `background_terminal_create` 启动服务器，确保不阻塞当前会话
+- 启动后必须通过 `background_terminal_output_path` 获取日志路径并读取日志，确认服务器已运行后再获取预览地址
+- 启动前务必检查是否已有服务器进程，避免端口冲突
+- 静态服务器默认端口为 8000
+- Node.js 项目的端口取决于项目配置
+- 端口冲突时可动态更换端口号
+- 使用 `background_terminal_list` 追踪运行中的终端，使用 `background_terminal_kill` 停止终端
+- 严禁使用 `pkill` 或 `killall` 停止服务器，必须使用 `background_terminal_kill` 加终端 ID
+- 运行服务器前确保依赖已安装：
+  - Node.js：`npm install`
+  - Python：`pip install -r requirements.txt`（若存在）
+  - PHP：`composer install`（若存在 `composer.json`）
+  - Ruby/Rails：`bundle install`（若存在 `Gemfile`）
+  - Go：`go mod download`（`go run` 会自动处理）
+  - Java：Maven/Gradle wrapper 自动处理依赖
+  - Rust：`cargo fetch`（`cargo run` 会自动处理）
