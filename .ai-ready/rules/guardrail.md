@@ -203,6 +203,7 @@
 3. **Git 操作**：正常的 `git clone`、`git pull`、`git push` 操作
 4. **文档查询**：使用 MCP 工具查询公开的技术文档
 5. **凭据管理工具**：按照 `go-mod-credential-fix.md` 规则处理凭据时，仅写入 `.netrc` 文件，不在回复中展示
+6. **代码平台凭证用于 Git 操作或部署**：当用户提供 GitHub、GitLab 等代码托管平台，或 Cloudflare、Vercel 等的应用发布平台的凭证（如 Personal Access Token）用于代码提交、推送、克隆或部署服务等合法开发用途时，允许在工具调用中正常使用该凭证（如配置 Git remote URL、写入 `.netrc`、设置 `Authorization` header 等），但**严禁在聊天回复、日志输出或任何用户可见的内容中展示凭证的实际值**
 
 ## 六、与其他规则的关系
 
