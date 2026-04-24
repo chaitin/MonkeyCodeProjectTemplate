@@ -88,6 +88,21 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y <package-name>
 - 禁用系统关键服务（如 networking、sshd 等）
 - 修改服务的 enable/disable 状态（开机自启）
 
+## 允许使用的远程管理命令
+
+### SSH 连接
+
+允许使用 `ssh` 命令连接外部服务器进行管理和业务部署，包括但不限于：
+
+- `ssh user@host` — 连接远程服务器
+- `ssh -p <port> user@host` — 指定端口连接
+- `scp` / `rsync` — 通过 SSH 进行文件传输
+- 在远程服务器上执行部署、运维相关操作
+
+**注意**：
+- 禁止通过 SSH 隧道（`ssh -R`、`ssh -L`）在当前环境搭建内网穿透或中转服务，详见 `guardrail.md`
+- SSH 私钥文件的内容不得在聊天回复中展示
+
 ## 例外情况
 
 如果禁止执行的命令确实是任务必需的，请通知用户并请他们手动执行。
