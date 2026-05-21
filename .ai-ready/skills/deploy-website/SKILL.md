@@ -157,12 +157,44 @@ ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || lsof -iTCP -sTCP:LISTEN -P 
 
 调用 MCP 工具 `request_preview`，传入服务器监听的端口号，获取预览 URL。
 
-### 6. 向用户展示预览地址
+### 6. 检测预览连接状态
+
+调用 `request_preview` 获得 `access_url` 后，必须检测预览连接是否正常。使用 curl 请求预览服务的健康检查端点：
+
+```bash
+curl -s --max-time 10 "$ACCESS_URL/.well-known/mcai-preview-connect-status-detect" | head -n10
+```
+
+**检测逻辑**：
+
+1. 忽略 curl 的退出码和 HTTP 响应码，**只检查**响应 body 中是否包含 `<meta name="mcai-preview-error"`
+2. 因为请求的 `mcai-preview-connect-status-detect` 是一个 dummy 地址，后端一定不存在这个文件，这个请求只是为了判断前置代理是否有返回报错。所以只要响应中**不包含**上述 meta，就说明预览连接正常，无需关注响应中的其他错误，请直接跳过下面排查步骤，继续向用户展示预览地址
+3. 如果**包含** `mcai-preview-error` 这个 meta，说明云端的预览服务无法访问本地站点。需要从 meta 标签的属性中提取错误信息：
+   - `code` — 错误状态码
+   - `content` — 错误原因描述
+   - `data-request-id` — 请求 ID
+
+**meta 标签格式**：
+
+```html
+<meta name="mcai-preview-error" code="530" content="开发环境端口 9091 连接失败，请检查 Web 站点进程是否已经退出，以及该端口是否有在监听。" data-request-id="RL-xxxxxxxx"/>
+```
+
+**异常排查流程**：
+
+根据提取到的 code (错误码) 和 content (异常原因)，
+
+  - 检查后台终端日志，排查应用代码错误
+  - 检查服务器进程是否仍在运行
+  - 尝试修复后重新部署
+
+
+### 7. 向用户展示预览地址
 
 - 输出可点击的超链接，指向 `request_preview` 返回的预览地址
 - 告知用户后台终端 ID，方便后续管理
 
-### 7. 处理 IP 白名单问题
+### 8. 处理 IP 白名单问题
 
 - 若用户反馈因 IP 未加白名单而无法访问，请用户提供拒绝页面上显示的 IP 地址
 - 再次调用 MCP 工具 `request_preview`，使用 `additional_ip_whitelist` 字段添加用户的 IP
