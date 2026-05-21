@@ -202,6 +202,10 @@ curl -s --max-time 10 "$ACCESS_URL/.well-known/mcai-preview-connect-status-detec
 
 ## 进程管理
 
+### 必须使用后台终端启动服务器
+
+**严禁使用 exec 工具直接启动服务器进程**，必须使用后台终端来启动。
+
 ### 查看后台终端
 
 使用 `background_terminal_list` 查看所有运行中的后台终端及其状态。
