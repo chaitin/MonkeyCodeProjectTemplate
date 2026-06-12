@@ -194,6 +194,8 @@ RUN mkdir -p "${CARGO_HOME:-$HOME/.cargo}" && printf '%s\n' \
 
 **优先使用 `docker`；只有当 `docker` 不可用时，才回退到 `podman`。**
 
+**用系统包管理器装任何东西之前，默认先把系统源切到清华 TUNA**（构建环境在国内，直连官方源大概率超时；源已经是国内镜像时跳过）：
+
 ```bash
 if command -v docker >/dev/null 2>&1; then
   RUNTIME=docker
@@ -201,16 +203,28 @@ elif command -v podman >/dev/null 2>&1; then
   RUNTIME=podman
 else
   # 都不在 PATH 中 → 通过包管理器安装 podman（不要尝试装 docker daemon）
+  # 安装前默认切到清华 TUNA 源
   if command -v apt-get >/dev/null 2>&1; then
+    sudo sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+      || sudo sed -i 's@archive.ubuntu.com@mirrors.tuna.tsinghua.edu.cn@g; s@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list
     sudo apt-get update && sudo apt-get install -y podman
   elif command -v dnf >/dev/null 2>&1; then
+    # CentOS/Rocky/Alma：repo 文件注释 mirrorlist，baseurl 指向清华
+    sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+             -e 's|^#\?baseurl=http[s]\?://[^/]*|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' \
+             -i /etc/yum.repos.d/*.repo 2>/dev/null || true
     sudo dnf install -y podman
   elif command -v yum >/dev/null 2>&1; then
+    sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+             -e 's|^#\?baseurl=http[s]\?://[^/]*|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' \
+             -i /etc/yum.repos.d/*.repo 2>/dev/null || true
     sudo yum install -y podman
   elif command -v apk >/dev/null 2>&1; then
+    sudo sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
     sudo apk add --no-cache podman
   elif command -v pacman >/dev/null 2>&1; then
-    sudo pacman -S --noconfirm podman
+    echo 'Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch' | sudo tee /etc/pacman.d/mirrorlist >/dev/null
+    sudo pacman -Sy --noconfirm podman
   elif command -v brew >/dev/null 2>&1; then
     brew install podman && podman machine init && podman machine start
   else
@@ -220,17 +234,6 @@ else
   RUNTIME=podman
 fi
 echo "using container runtime: $RUNTIME"
-```
-
-安装 podman 时若 `apt-get update` / `dnf` / `apk` 直连官方源超时或速度异常，先把系统包源切到清华 TUNA 再重试：
-
-```bash
-# Debian/Ubuntu
-sudo sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
-  || sudo sed -i 's@archive.ubuntu.com@mirrors.tuna.tsinghua.edu.cn@g; s@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list
-# Alpine
-sudo sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
-# CentOS/Rocky/Alma：将 repo 文件中的 mirrorlist 注释掉，baseurl 指向 https://mirrors.tuna.tsinghua.edu.cn
 ```
 
 后续步骤一律使用 `"$RUNTIME"` 代替字面 `docker`，因 docker / podman CLI 在 build / run / save 路径上参数兼容（podman 是 rootless，第一次跑可能需要 `podman system migrate` 一次，遇到再处理）。
@@ -588,6 +591,7 @@ curl -f -X POST \
 
 ### 通用
 
+- **使用系统包管理器（apt/yum/dnf/apk/pacman）安装任何软件前，默认先把系统源切到清华 TUNA**（`mirrors.tuna.tsinghua.edu.cn`），不要等超时了再换
 - **不得自行编造 `client_id`**：必须来自 `hostname` 命令的真实输出
 - **`ticket` 仅在本会话首次提交时询问用户**；首次提交成功拿到的 `ticket` 必须缓存到会话上下文，后续提交自动复用，**不得**反复询问
 - **不得自行编造 `ticket`**：要么来自用户输入，要么来自服务端返回
