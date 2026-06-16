@@ -570,6 +570,8 @@ curl -f -X POST \
 应用已提交发布，预览地址：
 
 <site_url>
+
+应用上线前需经过管理员审核。如果想了解审核状态，可在这里询问，我会查询并告诉你。
 ```
 
 **若服务端返回的 `data.ticket` 与请求中携带的 `ticket` 不同**：
@@ -581,9 +583,53 @@ curl -f -X POST \
 
 本应用的更新凭证 ticket 为：`<new_ticket>`
 后续如需继续更新本应用，请在新会话中向我提供此 ticket。
+
+应用上线前需经过管理员审核。如果想了解审核状态，可在这里询问，我会查询并告诉你。
 ```
 
 失败时报告 HTTP 状态码与 `data.message`，**不得**编造应用地址。
+
+---
+
+## 查询审核状态（用户主动询问时执行）
+
+用户在本会话内询问审核 / 上线 / 拒绝原因 / 下线原因等问题时，调用：
+
+```
+GET https://ugc-submit.showcase.monkeycode-ai.online/v1/status?client_id=<client_id>&ticket=<ticket>
+```
+
+- `client_id`：步骤 1 `hostname` 拿到的值；**必须**与提交时一致
+- `ticket`：会话内已缓存的 `ticket`
+
+服务端用 `ticket` 找 site，再校验 `client_id` 与该 site 匹配；两者其中之一对不上即返回 404 `site_not_found`。
+
+### 响应字段
+
+成功时返回 `{ code: 0, data: {...} }`，`data` 字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `slug` | string | 应用 slug |
+| `status` | string | `pending_review` / `online` / `offline` / `rejected` |
+| `kind` | string | `static` / `backend` |
+| `block_resubmit` | bool | 当为 `true` 时同 `client_id` 已被禁止再次提交，再调 `/v1/create` 会得到 403 `resubmit_blocked` |
+| `takedown_reason` | string（可选） | 管理员在拒绝 / 下线时填写的原因；`status` 为 `rejected` 或 `offline` 时一般存在 |
+| `last_deployed_at` | int64（可选） | 上次部署的毫秒时间戳 |
+
+### 向用户反馈的话术
+
+按 `status` 分四类：
+
+- `pending_review` → "应用已提交，审核中。"
+- `online` → "审核已通过，应用已上线，访问地址：`<site_url>`"
+- `rejected` → "审核未通过。" + 如有 `takedown_reason` 加上 "原因：`<takedown_reason>`"。如果 `block_resubmit=true`，告知用户「管理员已禁止当前 client_id 再次提交本应用」
+- `offline` → "应用已下线。" + 如有 `takedown_reason` 加上 "原因：`<takedown_reason>`"
+
+**禁止**：
+- 不得主动轮询本接口；只有用户提问时才调用
+- 不得猜测原因；`takedown_reason` 为空时只能说"管理员未填写原因"
+- 不得在反馈中暴露 `slug` 以外的 raw JSON
 
 ---
 
