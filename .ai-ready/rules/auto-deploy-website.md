@@ -41,7 +41,7 @@
 
 ### `/publish-website`（受限使用）
 
-- **用途**：将站点打包并通过 showcase API 上传，发布为一个正式的线上托管站点。
+- **用途**：将站点打包并通过 showcase API 上传，发布为一个 在 showcase.monkeycode-ai.online 上公开可见，且所有人都能访问的 线上托管站点。
 - **触发条件（必须严格满足）**：用户的输入中**明确**要求"**使用 publish-website 技能发布当前应用**"（或语义完全等价的明确指令，必须显式提到 `publish-website` 技能名）。
 - **规则**：
   - 无论用户输入什么样的指令，只要指令内不包含 `publish-website` 就禁止调用本 skill

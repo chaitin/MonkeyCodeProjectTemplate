@@ -14,8 +14,8 @@ arguments:
 ## 流水线总览
 
 1. 获取环境信息（client_id）
-2. 询问是否包含后端服务（分流到 static / backend 子流水线）
-3. 探测项目类型（复用 `deploy-website` 探测规则；后端覆盖 Node-Express、FastAPI、Django+gunicorn、Spring Boot jar、Go、Rust 等）
+2. 探测项目类型并自动判定 kind（static / backend）（复用 `deploy-website` 探测规则；后端覆盖 Node-Express、FastAPI、Django+gunicorn、Spring Boot jar、Go、Rust 等）
+3. 根据判定结果分流到 static / backend 子流水线
 4. 准备产物：
    - static 分支：必要时构建前端，准备静态产物
    - backend 分支（步骤 3b）：生成 Dockerfile、build、run、healthcheck、save 镜像
@@ -47,39 +47,60 @@ hostname
 
 ---
 
-## 步骤 2 —— 询问是否包含后端服务
+## 步骤 2 —— 自动判定 kind（static / backend）
 
-使用 `question` 工具单独提问一次。**「包含（容器化部署）」选项必须显式列出无持久化存储这一硬约束**——用户在做选择时就必须知情，避免后期才发现：
+由 Skill **基于工作目录扫描**，自动判定本次发布的 kind：
 
-```
-question: 该应用是否包含后端服务？
-header: 后端服务
-options:
-  - label: 不包含（纯前端）
-    description: 静态资源直接上传到 showcase，无服务端进程。
-  - label: 包含（容器化部署）
-    description: |
-      ⚠ 容器无持久化存储。服务更新、异常重启或被运维重建容器时会重置文件系统，
-      所有运行时写入（SQLite/日志/用户上传/缓存）都会丢失。
-      仅适合无状态服务，或所有持久数据都外接到独立服务（远程 DB / 对象存储等）的场景。
-```
+判定规则（按优先级）：
 
-- 用户选择 **不包含（纯前端）** → 进入 **static 子流水线**（步骤 3 → 4 → 5 → 6 → 7 → 8）
-- 用户选择 **包含（容器化部署）** → 进入 **backend 子流水线**（步骤 3 → 3b → 5 → 7 → 8；步骤 4/6 由 3b 取代）
+1. 工作目录中存在以下任一**后端特征**之一 → 判定为 `backend`：
+   - `requirements.txt` / `pyproject.toml` 含 `fastapi` / `uvicorn` / `django` / `flask` / `gunicorn`
+   - `manage.py`
+   - 顶层 `pom.xml` / `build.gradle`（Spring Boot 等 JVM 项目）
+   - `go.mod`
+   - `Cargo.toml`（且非纯 wasm 前端）
+   - `composer.json`（PHP）
+   - `Gemfile` 含 `rails` / `sinatra`
+   - `package.json` 中出现 `express` / `fastify` / `koa` / `hapi` / `nest` 等后端框架依赖
+2. 仅有 `index.html` / 静态 HTML 文件 → 判定为 `static`
+3. 存在 `package.json` 且无后端框架依赖（Vite / CRA / Next 静态导出 / Vue / Astro / Nuxt SSG 等纯前端项目） → 判定为 `static`
+4. 探测不出来 → 询问用户「按纯前端发布」还是「按容器化后端发布」，**仅此一次**作为兜底
+
+判定完成后分流：
+
+- `static` → **static 子流水线**（步骤 3 → 4 → 5 → 6 → 7 → 8）
+- `backend` → **backend 子流水线**（步骤 3 → 3b → 5 → 7 → 8；步骤 4/6 由 3b 取代）
+
+### 进入 backend 分支前必须告知用户（硬约束）
+
+只告诉用户 **与线上运行阶段相关** 的注意事项，不暴露任何 镜像 build 阶段细节（Dockerfile 怎么写、是否用 supervisord、依赖如何下载等都是 Skill 自己处理的事，与用户无关）。
+
+判定为 `backend` 后，**进入步骤 3b 之前** 必须在对话中明确告知以下平台限制：
+
+> **⚠ 即将以容器化后端方式发布本应用。线上运行时有以下四条限制，请确认是否继续发布：**
+> 
+> 1. **单容器**：平台只调度一个容器。如果应用依赖数据库、对象存储、缓存、队列等组件，会与业务一起塞在同一个容器里运行，不支持外部独立服务。
+> 2. **无外部网络**：容器无法访问公网与任何外部服务。远程数据库、S3、第三方 API、OAuth / 支付 / 微信、CDN、外部 LLM 等都不可达。业务在线上启动后，只能被外部访问，不应也不能访问互联网。
+> 3. **无持久化存储**：服务更新、异常重启或被运维重建容器时，文件系统会被重置，所有运行时写入（SQLite、用户上传、日志、缓存等）都会丢失。
+> 4. **公开可见**：应用发布后会在 用户作品集 (showcase.monkeycode-ai.online) 列表公开可见，所有人都可以访问到你发布的应用。
+
+然后用 `question` 工具，要求用户确认，选项为「继续发布」/「取消」。
+
+- 用户选「继续发布」 → 进入步骤 3b
+- 用户选「取消」 → 终止本次发布
 
 ---
 
 ## 步骤 3 —— 探测项目类型
 
-复用 `deploy-website` 中的探测逻辑。根据步骤 2 的选择分流：
+复用 `deploy-website` 中的探测逻辑。根据步骤 2 的自动判定结果分流：
 
-### static 分支（不包含后端）
+### static 分支（kind=static）
 
 | 探测结果 | 走向 |
 |---|---|
 | 存在 `package.json`（Node 项目） | → **Node 构建分支**（步骤 4 分支 B/C） |
 | 仅有 `index.html` / 静态 HTML 文件 | → **静态分支**（步骤 4 分支 A） |
-| 探测到 PHP / Python / Go / Ruby / Java / Rust / Django / Rails | → 回复 `检测到后端项目（{lang}），如需发布请在步骤 2 选择"包含（容器化部署）"。` 并终止 |
 
 #### 包管理器探测（仅 Node 项目）
 
@@ -101,7 +122,7 @@ options:
 
 记录预期的输出目录（`dist` / `out` / `build`），供步骤 4 使用。
 
-### backend 分支（包含后端）
+### backend 分支（kind=backend）
 
 探测项目语言/框架，至少覆盖以下场景：
 
@@ -121,42 +142,148 @@ options:
 
 ## 步骤 3b —— backend 子流水线
 
-> 仅当步骤 2 选择「包含（容器化部署）」时执行。完成后跳过步骤 4/6 直接进入步骤 5、7、8。
+> 仅当步骤 2 自动判定为 `backend` 且用户在告知容器无持久化存储后选择「继续发布」时执行。完成后跳过步骤 4/6 直接进入步骤 5、7、8。
 
 ### 3b.0 平台限制（生成 Dockerfile 前必须遵守）
 
-容器在 showcase 平台上**没有持久化存储**：
+showcase 平台对 backend 容器有四条硬约束，必须同时满足，否则镜像无法正常运行。
+
+#### A. 单容器 + 进程编排（按需 supervisord）
+
+- 平台只调度**一个容器**，不支持 docker-compose / k8s pod / sidecar
+- 进程编排策略**按附加组件需求二选一**（Skill 在 3b.1 自行判定）：
+  - **单进程方案（默认）**：业务本身无 DB / 对象存储 / 缓存 / 队列等附加依赖，是一个无状态后端进程 → **直接 `ENTRYPOINT` / `CMD` 拉起业务进程**，不要引入 supervisord
+  - **多进程方案**：业务依赖 DB / 对象存储 / 缓存 / 队列等附加组件 → 这些组件**全部打入同一镜像**，由 **supervisord** 与业务进程一起拉起、守护、按 `priority` 排序
+- 多进程方案下附加组件的本地化：
+  - 关系型 DB（PostgreSQL / MySQL / MariaDB）→ 整体打入镜像，初始 schema 在 builder stage 灌进数据目录
+  - 对象存储（MinIO / SeaweedFS）→ 整体打入镜像，bucket 在容器启动脚本里初始化
+  - Redis / Memcached / Elasticsearch / RabbitMQ 等 → 同理，全部本地拉起
+- 业务代码连接附加组件时**必须走 `127.0.0.1` / `localhost` / Unix socket**，不得使用外部 host 名或外部 endpoint
+
+#### B. 容器无外部网络（运行时离线）
+
+容器运行时**完全切断公网与外网访问**：
+
+- 出站 DNS、TCP、UDP 均不可达；远程 DB、远程 S3、远程 Redis、第三方 API、OAuth IdP、CDN、`pip` / `npm` / `apt` 等**全部不可用**
+- 镜像必须做到**完全自包含**：所有运行时需要的资源在 **builder stage 提前下载并 COPY 进 runtime stage**，包括但不限于：
+  - 业务依赖包（已经在 builder 装好，runtime 直接拷 venv / node_modules / target/release / vendor）
+  - 模型权重、embedding 文件、tokenizer
+  - 字体、字典、地理库、本地化资源
+  - DB 初始 schema（`*.sql`）与种子数据
+  - 静态前端产物（如果是前后端一体镜像）
+  - HTTPS 根证书（如果业务以前是直连公网 CA 校验，现在改为只信任内部证书或干脆走内网 HTTP）
+- 对外暴露：**仅 `service_port` 一个端口**，由平台反向代理对外提供 HTTP 服务
+
+#### C. 容器无持久化存储
 
 - 服务更新发布、容器异常崩溃、运维侧重启都会**重建容器**（旧实例销毁、新实例从镜像启动）
 - 不挂载任何 volume / bind mount，对文件系统的所有写入在重建时丢失
-- 不允许应用依赖本地文件状态延续（SQLite、文件型缓存、上传目录、日志归档、session 文件 …）
+- 容器内打包的 DB / 对象存储**也会一并清零**——重启后必须由 supervisord 启动脚本重新执行初始化 schema + 种子数据
 
 因此生成的应用与 Dockerfile **不得**：
 
 - 在 Dockerfile 里 `VOLUME` 声明数据目录（声明无效，反而误导用户）
-- 把 SQLite / Bolt / BadgerDB 等嵌入式 DB 文件落在容器内
-- 假设上次启动写入的文件下次还在
-- 把用户上传或运行时生成的资源写到容器内路径
 
-允许的状态外置方式：远程 DB（RDS、Supabase、PlanetScale…）、对象存储（S3 兼容）、外部缓存（远端 Redis）等。如果项目本身就是有状态的、不外接持久层，**回到步骤 2，与用户确认后改回纯前端或终止本次发布**。
+如果项目**强依赖**外部持久层或外部 API（如必须连真实的微信 / 支付 / 外部 LLM），**需再次告知用户确认相关功能部署后可能无法正常使用**，如果用户认同，则可以继续构建和发布。
+
+#### D. 资源上限
+
+- CPU：1 核
+- 内存：1 GiB（含 swap）
+- 镜像 tar.gz：≤ 500 MB
+
+打包 DB、对象存储、模型等附加组件时务必尽可能按此上限裁剪。
 
 ### 3b.1 生成 Dockerfile
 
-AI 基于步骤 3 的探测结果生成**多阶段 alpine** `Dockerfile`，写入 `/tmp/Dockerfile`。**不得**把 Dockerfile 写到用户工作目录。
+AI 基于步骤 3 的探测结果生成**多阶段 alpine** `Dockerfile`，写入 `/tmp/Dockerfile`，该 Dockerfile 专门用于构建被发布到 showcase 上的容器镜像。**不得**把这个 Dockerfile 写到用户工作目录。
 
 硬性写法约束：
 
 - 最终（runtime）stage 必须基于 alpine 或 alpine 风味的语言镜像（如 `eclipse-temurin:21-alpine-jdk`）
-- runtime stage **禁止** `apt-get` / `dnf` / `yum`
+- runtime stage **原则上禁止** `apt-get` / `dnf` / `yum`，如果必须安装软件包，在安装完后必须执行清理操作（如 `apt clean`）
 - **禁止** `ADD <url>` —— 所有外部资源在 builder stage 用 `RUN curl/wget` 显式落盘
 - 必须多阶段；runtime stage 只 `COPY --from=builder` 编译产物 / 运行时依赖
-- `CMD` 必须使用 exec 形式（JSON 数组），例如 `CMD ["node","server.js"]`
-- 必须 `EXPOSE <service_port>`，且与后续 multipart 字段 `service_port` 一致
+- **进程编排策略由 Skill 自动判定**（基于步骤 3 的探测结果）：
+  - 业务依赖 DB / 对象存储 / 缓存 / 队列等任一附加组件 → 走**多进程方案**，必须包含 supervisord 作为 PID 1（见 3b.1.a）
+  - 业务无任何附加组件依赖（单进程后端） → 走**单进程方案**，**不引入 supervisord**，直接 `ENTRYPOINT` / `CMD` 拉起业务进程
+- 业务用到的数据库 / 对象存储 / 缓存 / 队列等附加组件**必须整体打入同一镜像**（多进程方案下，见 3b.1.b）
+- 所有运行时资源（模型权重、字体、字典、初始化 SQL、根证书、静态前端产物 …）必须在 **builder stage 下载完毕**并 COPY 进 runtime stage；runtime 启动后**不得**再走任何外网
+- 业务代码连接附加组件必须走 `127.0.0.1` / `localhost` / Unix socket
+- `CMD` 必须为 exec 形式（JSON 数组）：
+  - 单进程方案示例：`CMD ["node","server.js"]` / `CMD ["./app"]` / `CMD ["python","-m","uvicorn","main:app","--host","0.0.0.0","--port","8080"]`
+  - 多进程方案示例：`CMD ["/usr/bin/supervisord","-c","/etc/supervisord.conf","-n"]`
+- 必须 `EXPOSE <service_port>`，且与后续 multipart 字段 `service_port` 一致；除业务端口外**不得 EXPOSE** 任何附加组件端口（DB / Redis / MinIO 等只走 127.0.0.1）
 - **所有 `FROM` 引用的 Docker Hub 镜像必须加 `registry.monkeycode-ai.online/` 代理前缀**：
   - 无 namespace 的官方镜像（`alpine` / `node` / `python` / `golang` / `nginx` / `rust` / `caddy` 等）必须插入 `library/`：`FROM registry.monkeycode-ai.online/library/alpine:3.20`
   - 已有 namespace 的镜像（如 `eclipse-temurin/...`）**不要**再插 `library/`：`FROM registry.monkeycode-ai.online/eclipse-temurin:21-alpine-jdk`
   - `FROM scratch` **不走**代理，保留原样
   - 该前缀只在生成 Dockerfile 时注入；showcase 服务端 load 镜像后引用本地 image id，不再受代理影响
+
+#### 3b.1.a supervisord 配置（仅多进程方案）
+
+> 仅当业务有附加组件依赖（DB / 对象存储 / 缓存 / 队列等）时启用本节；单进程方案跳过本节，直接在 runtime stage 写 `CMD ["业务命令", ...]` 即可。
+
+runtime stage 必须安装 supervisord 并提供配置文件：
+
+```dockerfile
+# runtime stage 内
+RUN apk add --no-cache supervisor
+COPY supervisord.conf /etc/supervisord.conf
+COPY --from=builder /app /app
+EXPOSE <service_port>
+CMD ["/usr/bin/supervisord","-c","/etc/supervisord.conf","-n"]
+```
+
+`supervisord.conf` 最小模板（按项目实际附加组件增删 `[program:*]` 段，并用 `priority` 控制启动顺序，数字越小越早启动）：
+
+```ini
+[supervisord]
+nodaemon=true
+user=root
+logfile=/dev/stdout
+logfile_maxbytes=0
+pidfile=/run/supervisord.pid
+
+[program:postgres]
+priority=10
+command=/usr/local/bin/docker-entrypoint.sh postgres
+user=postgres
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+
+[program:app]
+priority=50
+command=/app/start.sh
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+```
+
+`/app/start.sh` 中业务进程启动前要做：
+
+1. 等待附加组件就绪（`pg_isready` / `redis-cli ping` / 探活脚本，最长等 30s）
+2. 幂等地灌入初始 schema 与种子数据（从 builder 阶段烤进镜像的 `*.sql`）
+3. 再 `exec` 业务进程（保留 PID 1 子进程语义，方便 supervisord 回收）
+
+> supervisord 配置文件 `supervisord.conf` 和启动脚本 `start.sh` 由 Skill **生成到 `/tmp/`** 后 `COPY` 进镜像，**不得**写入用户工作目录。
+
+#### 3b.1.b 附加组件打包指引（仅多进程方案）
+
+| 组件 | 推荐做法 |
+|---|---|
+| PostgreSQL | builder stage 装好 `postgresql` + 初始化 `initdb`；runtime stage 用 `apk add postgresql`；supervisord 启动 `postgres -D /var/lib/postgresql/data`；schema 从 builder COPY，启动脚本里 `psql -f` 灌入 |
+| MySQL/MariaDB | runtime stage `apk add mariadb mariadb-client`；`mysql_install_db --user=mysql` 在 builder 完成；supervisord 启动 `mysqld --user=mysql` |
+| Redis | runtime stage `apk add redis`；supervisord 启动 `redis-server --bind 127.0.0.1 --save ""`（关闭持久化或写到容器内临时目录） |
+| MinIO | builder stage `wget` 拉 minio 二进制；runtime COPY；supervisord 启动 `minio server /data --address 127.0.0.1:9000`；bucket 在启动脚本里用 `mc` 初始化 |
+| Elasticsearch / Kafka 等重量级组件 | 1 GiB 内存装不下，**告知用户改造为轻量替代**（如改用 SQLite FTS / Redis Streams / NATS embedded）或终止本次发布 |
 
 #### 依赖下载镜像约定（builder stage 必须遵守）
 
@@ -251,6 +378,8 @@ build 失败时：打印 stderr 末段（最多 200 行），**立即终止**，
 
 选择一个未占用的 host 端口（脚本探测，不要硬编码）；`$SVC` 为生成 Dockerfile 时确定的容器内业务端口（service_port）。
 
+本地验证阶段**不强制**模拟线上「无外网」环境（线上 `--network none` 行为与 docker / podman 本地 host 网络存在差异，强制隔离反而干扰健康检查）。本地走默认网络即可，离线自检由 Skill 在 3b.1 通过 Dockerfile 写法约束保证：
+
 ```bash
 "$RUNTIME" run -d --rm \
   --cpus=1 --memory=1g --memory-swap=1g \
@@ -261,23 +390,27 @@ build 失败时：打印 stderr 末段（最多 200 行），**立即终止**，
 
 **禁止** `--privileged`、`--network host`、`build context 之外的 bind mount`。
 
-AI 根据应用类型选择 healthcheck path（如 `/`、`/healthz`、`/api/health`）与可接受状态码集合（默认 `{200,204,302,401}`）。在 30s 内每 2s 探测一次：
+由于镜像内可能要先拉起 DB / 对象存储再启业务，**healthcheck 总时长放宽到 90s**，每 3s 探测一次：
 
 ```bash
-for i in $(seq 1 15); do
+for i in $(seq 1 30); do
   code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$HOST<healthcheck_path>" || echo 000)
   case "$code" in
     200|204|302|401) ok=1; break;;
   esac
-  sleep 2
+  sleep 3
 done
 ```
 
-任一失败（容器启动失败 / healthcheck 30s 内未命中可接受状态码）：
+AI 根据应用类型选择 healthcheck path（如 `/`、`/healthz`、`/api/health`）与可接受状态码集合（默认 `{200,204,302,401}`）。
 
-1. 打印 `"$RUNTIME" logs <container>` 末段（≤200 行）
-2. `"$RUNTIME" stop <container>` + `"$RUNTIME" rmi $TAG` + `rm /tmp/Dockerfile`
+任一失败（容器启动失败 / healthcheck 90s 内未命中可接受状态码）：
+
+1. 打印 `"$RUNTIME" logs <container>` 末段（≤200 行）；如能拿到 supervisord 的子进程日志一并打印
+2. `"$RUNTIME" stop <container>` + `"$RUNTIME" rmi $TAG` + 清理 `/tmp/Dockerfile`；若走多进程方案再清理 `/tmp/supervisord.conf`、`/tmp/start.sh`（不存在则跳过）
 3. **立即终止**，**不得**继续上传
+
+> 本地能起来不代表线上能起来——线上是离线环境。如果在 3b.1 中识别到运行时代码会访问公网（远端模型/配置/第三方 API/用量上报等），即便本地 healthcheck 通过也必须**回到 3b.1 改造 Dockerfile 与应用代码**，把外网资源挪到 builder stage 提前烤进镜像。
 
 ### 3b.5 导出镜像
 
@@ -319,6 +452,8 @@ test "$size" -le $((500*1024*1024)) || { echo "镜像超过 500MB"; exit 1; }
 ```bash
 "$RUNTIME" rmi "$TAG" 2>/dev/null || true
 rm -f /tmp/Dockerfile
+rm -f /tmp/supervisord.conf  # 单进程方案下不存在，rm -f 无影响
+rm -f /tmp/start.sh           # 单进程方案下不存在，rm -f 无影响
 rm -f /tmp/showcase-image.tar.gz
 ```
 
@@ -523,7 +658,7 @@ curl -f -X POST \
 | 字段 | static | backend | 来源 |
 |---|---|---|---|
 | `client_id` | 必填 | 必填 | 步骤 1 中 `hostname` 命令的输出 |
-| `kind` | 必填（`static`） | 必填（`backend`） | 步骤 2 的选择 |
+| `kind` | 必填（`static`） | 必填（`backend`） | 步骤 2 的自动判定结果 |
 | `site_name` | 必填 | 必填 | 步骤 5b |
 | `site_author` | 必填 | 必填 | 步骤 5d |
 | `site_description` | 必填 | 必填 | 步骤 5c |
@@ -659,24 +794,35 @@ GET https://ugc-submit.showcase.monkeycode-ai.online/v1/status?client_id=<client
 
 ### backend 分支专用（Dockerfile + 容器化）
 
+- **单容器 + 按需 supervisord**——平台只调度一个容器：
+  - 项目用到的所有附加组件（DB / 对象存储 / Redis / 队列 …）必须**全部打入同一镜像**
+  - 进程编排策略由 Skill 基于项目探测结果**二选一**：
+    - 业务无任何附加组件依赖（单进程后端） → `CMD ["业务命令", ...]` 直接拉起，**禁止**画蛇添足引入 supervisord
+    - 业务依赖附加组件 → runtime stage 安装 supervisord，所有进程由 `supervisord -n` 拉起与守护，`CMD ["/usr/bin/supervisord","-c","/etc/supervisord.conf","-n"]`
+  - 多进程方案下 supervisord 配置 / 启动脚本由 Skill 生成到 `/tmp/` 再 COPY 进镜像，**不得**写入用户工作目录
+  - 业务连接附加组件必须走 `127.0.0.1` / `localhost` / Unix socket；除 `service_port` 外不得 `EXPOSE` 其他端口
+- **容器运行时无外部网络**——出站 DNS / TCP / UDP 全部不可达：
+  - runtime stage 不得有任何联网命令（`curl` / `wget` / `pip install` / `npm install` / `apk fetch` …）
+  - 模型权重、字体、字典、初始化 SQL、根证书、静态前端产物等运行时资源必须在 **builder stage 下载完毕**并 COPY 进 runtime stage
+  - 应用代码必须移除所有运行时外网调用（远端模型、远端配置、第三方 API、用量上报 …）
+  - 本地 healthcheck 验证阶段**不要求** `--network none`；离线自检由 3b.1 的 Dockerfile 写法约束（runtime stage 禁止联网命令、资源在 builder 落盘）从源头保证
+  - 进入 backend 分支前**必须**已在步骤 2 通过独立 `question` 向用户说明「无外网」「单容器」「无持久化」「1C1G」四条限制并取得「继续发布」确认
 - **容器无持久化存储**——服务更新、异常崩溃、运维重启都会重建容器，文件系统所有写入都会丢失：
   - Dockerfile 不得 `VOLUME` 数据目录
-  - 镜像内不得依赖 SQLite / Bolt / BadgerDB 等嵌入式 DB 落地
+  - 容器内打包的 DB / 对象存储重启后会清零，必须由 supervisord 启动脚本幂等地重新灌入初始 schema 与种子数据
   - 应用不得假设上次启动写入的文件下次还在
-  - 用户上传 / 运行时生成的资源必须外接（远程 DB、对象存储等）
-  - 进入 backend 分支前**必须**已在步骤 2 的 `question` description 里向用户说明该限制
+  - 用户上传 / 运行时生成的资源必须接受「重启即丢失」或落到容器内自带的 DB 实例
 - 最终（runtime）stage 必须基于 **alpine**（或 alpine 风味的语言镜像，如 `eclipse-temurin:21-alpine-jdk`）
 - runtime stage 禁止 `apt-get` / `dnf` / `yum`
 - 禁止 `ADD <url>`
 - 必须**多阶段**；runtime stage **只 COPY 产物**，不得编译
-- `CMD` 必须为 **exec 形式**（JSON 数组）
-- 必须 `EXPOSE` 与 multipart 字段 `service_port` 一致的端口
-- **Skill 不得把 Dockerfile 写到用户工作目录**；必须写到 `/tmp/Dockerfile`
+- 必须 `EXPOSE` 与 multipart 字段 `service_port` 一致的端口（仅业务端口）
+- **Skill 不得把 Dockerfile / supervisord.conf / start.sh 写到用户工作目录**；必须写到 `/tmp/`（supervisord.conf / start.sh 仅多进程方案下产生）
 - **优先使用 `docker`，缺失时必须用包管理器安装 `podman` 后继续**，绝不可手动安装 docker engine；所有 build / run / save 命令统一以 `"$RUNTIME"` 引用
 - 本地 `"$RUNTIME" run` **禁止** `--privileged`、`--network host`、build context 之外的 bind mount
 - **build / run / healthcheck 任一失败必须 abort 并打印 stderr 末段，禁止继续上传**
 - 镜像 tar.gz 必须 ≤ 500MB
-- 收尾必须执行 `"$RUNTIME" rmi <tag>`、`rm /tmp/Dockerfile`、`rm /tmp/showcase-image.tar.gz`（无论成功失败）
+- 收尾必须执行 `"$RUNTIME" rmi <tag>`、`rm -f /tmp/Dockerfile /tmp/supervisord.conf /tmp/start.sh /tmp/showcase-image.tar.gz`（无论成功失败；单进程方案下 supervisord.conf / start.sh 不存在，`-f` 静默跳过）
 - **所有 `FROM` 引用的 Docker Hub 镜像必须加 `registry.monkeycode-ai.online/` 代理前缀**：
   - 无 namespace 的官方镜像必须插入 `library/`（如 `registry.monkeycode-ai.online/library/alpine:3.20`、`registry.monkeycode-ai.online/library/node:20-alpine`）
   - 已有 namespace 的镜像**不要**再插 `library/`（如 `registry.monkeycode-ai.online/eclipse-temurin:21-alpine-jdk`）
@@ -691,7 +837,7 @@ GET https://ugc-submit.showcase.monkeycode-ai.online/v1/status?client_id=<client
 |---|---|
 | `hostname` 命令失败 | 报告错误并终止 |
 | 找不到项目根 | 询问用户路径，不得猜测 |
-| static 分支探测到后端语言 | 提示用户改回步骤 2 选「包含」并终止本次 |
+| 自动判定异常（既非纯前端也非后端项目） | 按步骤 2 兜底规则向用户询问 kind，仍无法确定则终止 |
 | 构建命令无法解析 | 询问用户指定命令 |
 | `install` 失败 | 输出 stderr 尾部并终止 |
 | `build` 失败（前端 / `"$RUNTIME" build`） | 输出 stderr 尾部并终止 |
@@ -700,8 +846,10 @@ GET https://ugc-submit.showcase.monkeycode-ai.online/v1/status?client_id=<client
 | 应用内容无任何可用元数据 | 自动生成留空，由用户在 `question` 工具的 Other 中输入 |
 | zip 自检发现开发文件混入 | 调整排除项重新打包；仍存在则终止 |
 | 镜像 tar.gz > 500MB | 提示精简产物（多阶段编译 + alpine + 仅拷贝必要文件）并终止 |
-| `"$RUNTIME" run` 启动失败 | 打印 `"$RUNTIME" logs` 末段，清理容器/镜像/Dockerfile，终止 |
-| healthcheck 30s 内未命中可接受状态码 | 打印 `"$RUNTIME" logs` 末段，清理，终止 |
+| `"$RUNTIME" run` 启动失败 | 打印 `"$RUNTIME" logs` 末段（多进程方案下含 supervisord 子进程日志），清理容器/镜像/`/tmp` 临时文件，终止 |
+| healthcheck 90s 内未命中可接受状态码 | 打印 `"$RUNTIME" logs` 末段（多进程方案下含 supervisord 子进程日志），清理，终止 |
+| 3b.1 中识别到运行时代码访问公网 | 视为镜像未达到「完全自包含」，回到 3b.1 改造 Dockerfile + 应用代码（把外网资源挪到 builder stage，去掉运行时外网调用），重试 |
+| 项目需要重量级附加组件（Elasticsearch / Kafka 等）超出 1C1G | 提示用户替换为轻量替代或拆解需求，终止本次发布 |
 | API 请求非 2xx | 重试 1 次；仍失败则报告 `status` 与 `data.message` 后终止 |
 | `data.site_url` 为空 | 视为失败，报告 `data.message` 后终止 |
 | 用户输入的 `ticket` 实际无效（API 返回错误） | 报告 `data.message` 后终止；不得自动转为新建应用 |
