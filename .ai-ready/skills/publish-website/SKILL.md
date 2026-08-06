@@ -687,7 +687,7 @@ curl -f -X POST \
   -F "site_description=<应用描述>" \
   [ -F "ticket=<ticket>" ] \
   -F "site_zip_file=@/tmp/dist.zip" \
-  https://ugc-submit.sc.monkeycode-ai.online/v1/create
+  https://ugc-submit.monkeycode-ai.gallery/v1/create
 ```
 
 **backend 分支**：
@@ -703,7 +703,7 @@ curl -f -X POST \
   -F "site_image=@/tmp/showcase-image.tar.gz" \
   -F "service_port=<容器内业务端口>" \
   -F "healthcheck_path=<healthcheck path>" \
-  https://ugc-submit.sc.monkeycode-ai.online/v1/create
+  https://ugc-submit.monkeycode-ai.gallery/v1/create
 ```
 
 字段说明：
@@ -784,7 +784,7 @@ curl -f -X POST \
 用户在本会话内询问审核 / 上线 / 拒绝原因 / 下线原因等问题时，调用：
 
 ```
-GET https://ugc-submit.sc.monkeycode-ai.online/v1/status?client_id=<client_id>&ticket=<ticket>
+GET https://ugc-submit.monkeycode-ai.gallery/v1/status?client_id=<client_id>&ticket=<ticket>
 ```
 
 - `client_id`：步骤 1 `hostname` 拿到的值；**必须**与提交时一致
@@ -834,7 +834,7 @@ curl -f -X POST \
   -F "client_id=<client_id>" \
   -F "ticket=<ticket>" \
   [ -F "reason=<撤回原因>" ] \
-  https://ugc-submit.sc.monkeycode-ai.online/v1/recall
+  https://ugc-submit.monkeycode-ai.gallery/v1/recall
 ```
 
 字段说明：
