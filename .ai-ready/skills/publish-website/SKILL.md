@@ -123,10 +123,10 @@ After classification, route as follows:
 
 After classifying the project as `static`, explicitly state the following platform limitations in the conversation **before entering Step 3**:
 
-> **Warning: This application is about to be published to the [MonkeyCode-AI User Showcase](https://showcase.monkeycode-ai.online/). The online runtime has the following two limitations. Please confirm whether to continue publishing:**
+> **Warning: This application is about to be published to the [MonkeyCode-AI User Showcase](https://monkeycode-ai.gallery/). The online runtime has the following two limitations. Please confirm whether to continue publishing:**
 >
 > 1. **Data can only be stored in the browser**: A pure frontend application has no server-side persistence layer. Available storage is limited to the current browser's `localStorage` / `sessionStorage` / `IndexedDB`. Data does not carry over when the user changes browsers or devices or clears the cache; data is not shared among users.
-> 2. **Publicly visible**: After publication, the application is publicly visible in the User Showcase (showcase.monkeycode-ai.online), and anyone can access it.
+> 2. **Publicly visible**: After publication, the application is publicly visible in the User Showcase (monkeycode-ai.gallery), and anyone can access it.
 
 Then use the `question` tool to request confirmation, with options "Continue publishing" / "Cancel."
 
@@ -139,12 +139,12 @@ Tell the user only the considerations **related to the online runtime phase**. D
 
 After classifying the project as `backend`, explicitly state the following platform limitations in the conversation **before entering Step 3b**:
 
-> **Warning: This application is about to be published as a container to the [MonkeyCode-AI User Showcase](https://showcase.monkeycode-ai.online/). The online runtime has the following four limitations. Please confirm whether to continue publishing:**
+> **Warning: This application is about to be published as a container to the [MonkeyCode-AI User Showcase](https://monkeycode-ai.gallery/). The online runtime has the following four limitations. Please confirm whether to continue publishing:**
 > 
 > 1. **Single container**: The platform schedules only one container. If the application depends on components such as a database, object storage, cache, or queue, they run in the same container as the application; independent external services are not supported.
 > 2. **No external network**: The container cannot access the public Internet or any external service. Remote databases, S3, third-party APIs, OAuth / payment / WeChat, CDNs, external LLMs, and similar services are unreachable. Once online, the application can only be accessed externally and must not and cannot access the Internet.
 > 3. **No persistent storage**: The file system is reset when the service is updated, restarts unexpectedly, or operations rebuilds the container. All runtime writes (SQLite, user uploads, logs, caches, and so on) are lost.
-> 4. **Publicly visible**: After publication, the application is publicly visible in the User Showcase (showcase.monkeycode-ai.online), and anyone can access it.
+> 4. **Publicly visible**: After publication, the application is publicly visible in the User Showcase (monkeycode-ai.gallery), and anyone can access it.
 
 Then use the `question` tool to request confirmation, with options "Continue publishing" / "Cancel."
 
@@ -267,11 +267,6 @@ Hard authoring constraints:
 - Automatically select the process orchestration strategy according to 3b.0 Section A: single-process approach `CMD ["application command", ...]`; multi-process approach `CMD ["/usr/bin/supervisord","-c","/etc/supervisord.conf","-n"]` (see 3b.1.a for configuration)
 - `CMD` must use exec form (JSON array)
 - Must `EXPOSE <service_port>`, matching the multipart field `service_port`; auxiliary component ports (DB / Redis / MinIO, and others) use only 127.0.0.1 and **must not be EXPOSEd**
-- **Every Docker Hub image referenced by `FROM` must have the `registry.monkeycode-ai.online/` proxy prefix**:
-  - Official images without a namespace (`alpine` / `node` / `python` / `golang` / `nginx` / `rust` / `caddy`, and others) must insert `library/`: `FROM registry.monkeycode-ai.online/library/alpine:3.20`
-  - Images that already have a namespace (such as `eclipse-temurin/...`) **must not** insert another `library/`: `FROM registry.monkeycode-ai.online/eclipse-temurin:21-alpine-jdk`
-  - `FROM scratch` **does not use** the proxy; leave it unchanged
-  - Inject this prefix only when generating the Dockerfile; after the showcase server loads the image, it references the local image ID and is no longer affected by the proxy
 
 #### 3b.1.a supervisord Configuration (Multi-process Approach Only)
 
@@ -338,89 +333,15 @@ Before starting the application process, `/app/start.sh` must:
 | MinIO | Download the minio binary with `wget` in the builder stage; COPY it into runtime; start `minio server /data --address 127.0.0.1:9000` with supervisord; initialize the bucket with `mc` in the startup script |
 | Heavyweight components such as Elasticsearch / Kafka | They do not fit in 1 GiB of memory. **Tell the user to replace them with a lightweight alternative** (such as SQLite FTS / Redis Streams / NATS embedded) or terminate this publication |
 
-#### Dependency Download Mirror Convention (Must Be Followed in the builder Stage)
-
-The build environment is located in China by default, so direct connections to official sources are highly likely to time out. **Before downloading any dependency in the builder stage, switch to the corresponding Chinese mirror below**:
-
-| Ecosystem | Mirror | Dockerfile Syntax |
-|---|---|---|
-| Go | goproxy.cn | `ENV GOPROXY=https://goproxy.cn,direct` |
-| Node (npm/pnpm) | npmmirror.com | `RUN npm config set registry https://registry.npmmirror.com` (pnpm also reads npm configuration; for yarn, use `yarn config set registry https://registry.npmmirror.com`) |
-| Python (pip) | Tsinghua TUNA PyPI | `RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt` |
-| Rust (cargo) | Tsinghua TUNA crates.io | See the config.toml snippet below |
-| Java (Maven) | Alibaba Cloud | Point the `settings.xml` mirror to `https://maven.aliyun.com/repository/public`, or use Gradle `repositories { maven { url "https://maven.aliyun.com/repository/public" } }` |
-| Alpine apk | Tsinghua TUNA | `RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories` |
-| Debian/Ubuntu apt | Tsinghua TUNA | `RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources` (use `/etc/apt/sources.list` for older images without a `.sources` file) |
-
-Rust cargo mirror configuration (in the builder stage):
-
-```dockerfile
-RUN mkdir -p "${CARGO_HOME:-$HOME/.cargo}" && printf '%s\n' \
-  '[source.crates-io]' \
-  'replace-with = "tuna"' \
-  '' \
-  '[source.tuna]' \
-  'registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"' \
-  > "${CARGO_HOME:-$HOME/.cargo}/config.toml"
-```
-
-Notes:
-
-- The mirror-switch statement must appear **before the first dependency download command**
-- These configurations belong only in the builder stage; package installation is already prohibited in the runtime stage, so they are unnecessary there
-- If a mirror outage causes a download failure, fall back to the official source and retry once before considering it failed
-
 ### 3b.2 Confirm the Container Runtime (Required)
 
 **Prefer `docker`; fall back to `podman` only when `docker` is unavailable.**
-
-**Before installing anything with the system package manager, switch the system source to Tsinghua TUNA by default** (the build environment is in China and direct connections to official sources are highly likely to time out; skip this when the source is already a Chinese mirror):
-
-```bash
-if command -v docker >/dev/null 2>&1; then
-  RUNTIME=docker
-elif command -v podman >/dev/null 2>&1; then
-  RUNTIME=podman
-else
-  # Neither is in PATH -> install podman through the package manager (do not try to install the docker daemon)
-  # Switch to the Tsinghua TUNA source by default before installation
-  if command -v apt-get >/dev/null 2>&1; then
-    sudo sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
-      || sudo sed -i 's@archive.ubuntu.com@mirrors.tuna.tsinghua.edu.cn@g; s@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list
-    sudo apt-get update && sudo apt-get install -y podman
-  elif command -v dnf >/dev/null 2>&1; then
-    # CentOS/Rocky/Alma: comment out mirrorlist in repo files and point baseurl to Tsinghua
-    sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-             -e 's|^#\?baseurl=http[s]\?://[^/]*|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' \
-             -i /etc/yum.repos.d/*.repo 2>/dev/null || true
-    sudo dnf install -y podman
-  elif command -v yum >/dev/null 2>&1; then
-    sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-             -e 's|^#\?baseurl=http[s]\?://[^/]*|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' \
-             -i /etc/yum.repos.d/*.repo 2>/dev/null || true
-    sudo yum install -y podman
-  elif command -v apk >/dev/null 2>&1; then
-    sudo sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
-    sudo apk add --no-cache podman
-  elif command -v pacman >/dev/null 2>&1; then
-    echo 'Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch' | sudo tee /etc/pacman.d/mirrorlist >/dev/null
-    sudo pacman -Sy --noconfirm podman
-  elif command -v brew >/dev/null 2>&1; then
-    brew install podman && podman machine init && podman machine start
-  else
-    echo "No available package manager; cannot install a container runtime" >&2
-    exit 1
-  fi
-  RUNTIME=podman
-fi
-echo "using container runtime: $RUNTIME"
-```
 
 In all subsequent steps, use `"$RUNTIME"` instead of the literal `docker`, because the docker / podman CLIs have compatible parameters for build / run / save operations (podman is rootless and may require a one-time `podman system migrate` on its first run; handle this if encountered).
 
 ### 3b.3 Local build
 
-The build phase **must** use `--network host` so the builder stage can directly reuse the host network when fetching dependencies (Chinese mirrors, apt/apk sources, and others):
+The build phase **must** use `--network host` so the builder stage can directly reuse the host network when fetching dependencies (apt/apk sources, and others):
 
 ```bash
 TAG="showcase-publish-$(openssl rand -hex 4):tmp"
@@ -532,7 +453,7 @@ If the expected artifact directory exists and **contains `index.html`**, use it 
 
 ### Branch C - Node Project Without dist (Build Required)
 
-1. If `node_modules` does not exist, run `<pkgMgr> install`. **Switch the registry to npmmirror before installation** (npm/pnpm: `npm config set registry https://registry.npmmirror.com`; yarn: `yarn config set registry https://registry.npmmirror.com`), because direct connections to registry.npmjs.org are highly likely to time out in China. On failure, output the end of stderr and **terminate**.
+1. If `node_modules` does not exist, run `<pkgMgr> install`.
 2. Run the resolved build command. On failure, output the end of stderr and **terminate**; do not retry blindly.
 3. Locate `index.html`:
    - First search within the expected artifact directory
@@ -738,7 +659,7 @@ Server response structure:
   "status": 200,
   "data": {
     "message": "success or error detail",
-    "site_url": "https://xxxxx.showcase.monkeycode-ai.online",
+    "site_url": "https://xxxxx.monkeycode-ai.gallery",
     "ticket": "<reuse this ticket within the session>"
   }
 }
@@ -888,7 +809,6 @@ The application is currently still in the <status> state and will only go offlin
 
 - **Execute this Skill only when the user's latest message explicitly requests publication**: after publishing once in the current session, if the user continues adjusting code/content without explicitly requesting "publish using publish-website" in the latest message, **do not** automatically run the publishing process again. Always use `/deploy-website` local deployment plus the platform's online preview for intermediate versions, and do not proactively ask whether the user wants to publish again
 - **Step 1b, the publishing content compliance precheck, must run first**: if either "software download/distribution (hosting apk/ipa/exe/dmg/msi/pkg or other installers)" or "direct publication of an open-source CMS / website panel (WordPress / Halo / Typecho / aaPanel / 1Panel / cPanel, and others)" matches, **terminate immediately** and do not enter kind classification or any subsequent step
-- **Before installing any software with a system package manager (apt/yum/dnf/apk/pacman), switch the system source to Tsinghua TUNA by default** (`mirrors.tuna.tsinghua.edu.cn`); do not wait for a timeout before switching
 - **Do not fabricate `client_id`**: it must come from the actual output of the `hostname` command
 - **Ask the user about `ticket` only on the first submission in this session**; the `ticket` received after the first successful submission must be cached in the session context and automatically reused for subsequent submissions. **Do not** ask repeatedly
 - **Do not fabricate `ticket`**: it must come either from user input or the server response
@@ -939,11 +859,6 @@ The application is currently still in the <status> state and will only go offlin
 - **Any build / run / healthcheck failure must abort and print the end of stderr; do not continue uploading**
 - The image tar.gz must be <= 500MB
 - Cleanup must run `"$RUNTIME" rmi <tag>` and `rm -f /tmp/Dockerfile /tmp/supervisord.conf /tmp/start.sh /tmp/showcase-image.tar.gz` (on both success and failure; supervisord.conf / start.sh do not exist under the single-process approach, so `-f` silently skips them)
-- **Every Docker Hub image referenced by `FROM` must have the `registry.monkeycode-ai.online/` proxy prefix**:
-  - Official images without a namespace must insert `library/` (such as `registry.monkeycode-ai.online/library/alpine:3.20` and `registry.monkeycode-ai.online/library/node:20-alpine`)
-  - Images that already have a namespace **must not** insert another `library/` (such as `registry.monkeycode-ai.online/eclipse-temurin:21-alpine-jdk`)
-  - `FROM scratch` **does not use** the proxy
-- **Dependency downloads in the builder stage must use Chinese mirrors** (see "Dependency Download Mirror Convention" in 3b.1): Go -> goproxy.cn, npm/pnpm/yarn -> npmmirror.com, pip -> Tsinghua PyPI, cargo -> Tsinghua crates.io, Maven/Gradle -> Alibaba Cloud, apk/apt/yum -> Tsinghua TUNA. The mirror-switch statement must precede the first dependency download command
 
 ---
 
